@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.env
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Project specific
+product_images/
+*.log
+*.csv
+*.xlsx
+
+# Windows
+Thumbs.db
+Desktop.ini 
