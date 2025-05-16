@@ -2,22 +2,45 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 .env
-.venv/
+.venv
+env/
 venv/
 ENV/
 
 # IDE
-.vscode/
 .idea/
-
-# Project specific
-product_images/
-*.log
-*.csv
-*.xlsx
+.vscode/
+*.swp
+*.swo
 
 # Windows
 Thumbs.db
-Desktop.ini 
+ehthumbs.db
+Desktop.ini
+
+# Project specific
+*.spec
+!NewMakeImage123.spec
+*.log
+*.csv
+*.xlsx 
