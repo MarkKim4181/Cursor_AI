@@ -1,6 +1,10 @@
 import os
 import subprocess
-from tkinter import Tk, filedialog, Button, Label, Canvas, PhotoImage, Frame, Scale, HORIZONTAL, colorchooser, StringVar, Entry, Scrollbar
+import re
+import cv2
+import numpy as np
+import pytesseract
+from tkinter import Tk, filedialog, Button, Label, Canvas, PhotoImage, Frame, Scale, HORIZONTAL, colorchooser, StringVar, Entry, Scrollbar, Text
 from PIL import Image, ImageTk, ImageDraw, ImageColor, ImageFilter
 
 # 전역 변수 추가
@@ -75,9 +79,28 @@ def create_thumbnails(image_path, output_dir):
     global overlap_scale_value_1, overlap_scale_value, overlap_scale_value_3, pastel_color_1, text_2jpg_var
     os.makedirs(output_dir, exist_ok=True)
 
+    # 이미지 전처리 및 OCR 수행
     base_image = Image.open(image_path)
     if base_image.mode != 'RGBA':
         base_image = base_image.convert('RGBA')
+    
+    # 이미지 전처리
+    processed_image = preprocess_image(base_image)
+    
+    # OCR 수행
+    ocr_text = improve_ocr_recognition(processed_image)
+    
+    # 송장번호 추출
+    carrier, tracking_number = extract_tracking_number(ocr_text)
+    
+    # OCR 결과를 텍스트 위젯에 표시
+    if hasattr(root, 'text_widget'):
+        root.text_widget.delete(1.0, 'end')
+        root.text_widget.insert('end', f'OCR 결과:\n{ocr_text}\n\n')
+        if carrier and tracking_number:
+            root.text_widget.insert('end', f'택배사: {carrier}\n송장번호: {tracking_number}')
+    
+    # 썸네일 생성 로직
     base_image.thumbnail((1000, 1000))
 
     # 1.jpg: 중앙 배치 (대각선 배경 적용, 대각선 반대 방향)
@@ -399,5 +422,89 @@ button_apply.pack(side='left', padx=5)
 
 # 초기 출력 경로 설정 (자동 팝업 제거)
 #select_output_directory()
+
+def preprocess_image(image):
+    # 이미지 크기 3배 확대
+    width, height = image.size
+    image = image.resize((width*3, height*3), Image.Resampling.LANCZOS)
+    
+    # 가우시안 블러로 노이즈 제거
+    image = image.filter(ImageFilter.GaussianBlur(radius=1))
+    
+    # 이미지 선명도 향상
+    image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=250, threshold=3))
+    
+    return image
+
+def improve_ocr_recognition(image):
+    # 이미지를 OpenCV 형식으로 변환
+    img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    
+    # 적응형 이진화 적용
+    gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    
+    # 모폴로지 연산으로 노이즈 제거
+    kernel = np.ones((2,2), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    
+    # OCR 설정
+    custom_config = r'--oem 3 --psm 4'
+    text = pytesseract.image_to_string(binary, lang='kor+eng', config=custom_config)
+    
+    return text
+
+def extract_tracking_number(text):
+    # 택배사 키워드 확장
+    carriers = {
+        'CJ대한통운': r'\b\d{10,12}\b',
+        '우체국택배': r'\b\d{13}\b',
+        '한진택배': r'\b\d{12}\b',
+        '롯데택배': r'\b\d{12}\b',
+        '로젠택배': r'\b\d{11}\b'
+    }
+    
+    # 텍스트를 줄 단위로 분석
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        # 택배사 키워드 검색
+        for carrier, pattern in carriers.items():
+            if carrier in line:
+                # 현재 줄과 주변 줄에서 송장번호 검색
+                search_range = lines[max(0, i-2):min(len(lines), i+3)]
+                for search_line in search_range:
+                    # 공백 제거 후 매칭
+                    clean_line = search_line.replace(' ', '')
+                    matches = re.findall(pattern, clean_line)
+                    if matches:
+                        # 연도 형식 제외
+                        for match in matches:
+                            if not re.match(r'20\d{2}', match):
+                                return carrier, match
+    
+    return None, None
+
+# 메인 프레임
+main_frame = Frame(root)
+main_frame.pack(fill='both', expand=True, padx=10, pady=5)
+
+# OCR 결과 표시 영역
+result_frame = Frame(main_frame)
+result_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+result_label = Label(result_frame, text='OCR 결과', font=('Arial', 12, 'bold'))
+result_label.pack(pady=5)
+
+# 스크롤바가 있는 텍스트 영역
+root.text_widget = Text(result_frame, height=10, wrap='word')
+scrollbar = Scrollbar(result_frame, command=root.text_widget.yview)
+root.text_widget.configure(yscrollcommand=scrollbar.set)
+
+root.text_widget.pack(side='left', fill='both', expand=True)
+scrollbar.pack(side='right', fill='y')
+
+# 기존 UI 요소들
+control_frame = Frame(main_frame)
+control_frame.pack(fill='x', padx=5, pady=5)
 
 root.mainloop()
